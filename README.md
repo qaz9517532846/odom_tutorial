@@ -28,3 +28,7 @@ $ rosrun odom_tutorial odom_vel
 Encoder data publisher test.
 
 $ rosrun odom_tutorial vel_pub
+
+Encoder data to odom data.
+
+$ rosrun odom_tutorial encoder_odom
