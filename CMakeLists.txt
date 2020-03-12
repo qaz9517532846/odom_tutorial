@@ -148,9 +148,9 @@ add_executable(odom_vel src/odom_vel.cpp)
 target_link_libraries(odom_vel ${catkin_LIBRARIES})
 add_dependencies(odom_vel odom_tutorial_generate_messages_cpp)
 
-add_executable(odom_encoder src/odom_encoder.cpp)
-target_link_libraries(odom_encoder ${catkin_LIBRARIES})
-add_dependencies(odom_encoder odom_tutorial_generate_messages_cpp)
+add_executable(encoder_odom src/encoder_odom.cpp)
+target_link_libraries(encoder_odom ${catkin_LIBRARIES})
+add_dependencies(encoder_odom odom_tutorial_generate_messages_cpp)
 
 add_executable(vel_pub src/vel_pub.cpp)
 target_link_libraries(vel_pub ${catkin_LIBRARIES})
