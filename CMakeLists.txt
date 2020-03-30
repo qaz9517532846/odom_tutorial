@@ -168,6 +168,14 @@ add_executable(odom_pose_nav src/odom_pose_nav.cpp)
 target_link_libraries(odom_pose_nav ${catkin_LIBRARIES})
 add_dependencies(odom_pose_nav odom_tutorial_generate_messages_cpp)
 
+add_executable(encoder_imu_odom src/encoder_imu_odom.cpp)
+target_link_libraries(encoder_imu_odom ${catkin_LIBRARIES})
+add_dependencies(encoder_imu_odom odom_tutorial_generate_messages_cpp)
+
+add_executable(encoder_imu_AMCL_odom src/encoder_imu_AMCL_odom.cpp)
+target_link_libraries(encoder_imu_AMCL_odom ${catkin_LIBRARIES})
+add_dependencies(encoder_imu_AMCL_odom odom_tutorial_generate_messages_cpp)
+
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
