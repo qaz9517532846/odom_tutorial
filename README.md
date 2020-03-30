@@ -37,3 +37,15 @@ Encoder data to odom data.
 ``` bash
 $ rosrun odom_tutorial encoder_odom
 ```
+
+Encoder and IMU data to odom data.
+
+``` bash
+$ rosrun odom_tutorial encoder_imu_odom
+```
+
+Encoder and IMU , AMCL pose to odom data.
+
+``` bash
+$ rosrun odom_tutorial encoder_imu_AMCL_odom
+```
