@@ -12,28 +12,20 @@
 /**
  * This tutorial demonstrates receiving ZED odom and pose messages over the ROS system.
  */
+double tx, ty, tz;
+double roll, pitch, yaw;
 
-class agv_position {
-public:
-    ros::Publisher odom_pub;
-    ros::Subscriber subPose;
-
-    tf::TransformBroadcaster odom_broadcaster;
-
-    void poseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
-};
 
 /**
  * Subscriber callbacks
  */
 
-void agv_position::poseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg) {
-    agv_position pose;
+void poseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg) {
 
     // Camera position in map frame
-    double tx = msg->pose.position.x - 0.26;
-    double ty = msg->pose.position.y - 0.05;
-    double tz = msg->pose.position.z;
+    tx = msg->pose.position.x;
+     ty = msg->pose.position.y;
+     tz = msg->pose.position.z;
 
     // Orientation quaternion
     tf2::Quaternion q(
@@ -46,7 +38,6 @@ void agv_position::poseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
     tf2::Matrix3x3 m(q);
 
     // Roll Pitch and Yaw from rotation matrix
-    double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
 
     // Output the measure
@@ -54,37 +45,6 @@ void agv_position::poseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
              msg->header.frame_id.c_str(),
              tx, ty, tz,
              roll * RAD2DEG, pitch * RAD2DEG, yaw * RAD2DEG);
-
-    ros::Time current_time;
-    geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(yaw);
-
-    //first, we'll publish the transform over tf
-    geometry_msgs::TransformStamped odom_trans;
-    odom_trans.header.stamp = current_time;
-    odom_trans.header.frame_id = "odom";
-    odom_trans.child_frame_id = "base_link";
-
-    odom_trans.transform.translation.x = tx;
-    odom_trans.transform.translation.y = ty;
-    odom_trans.transform.translation.z = 0.0;
-    odom_trans.transform.rotation = odom_quat;
-
-    //send the transform
-    pose.odom_broadcaster.sendTransform(odom_trans);
-
-    nav_msgs::Odometry odom;
-    odom.header.stamp = current_time;
-    odom.header.frame_id = "odom";
-
-    //set the position
-    odom.pose.pose.position.x = tx;
-    odom.pose.pose.position.y = ty;
-    odom.pose.pose.position.z = 0.0;
-    odom.pose.pose.orientation = odom_quat;
-    odom.child_frame_id = "camera_link";
-
-    //publish the message
-    odom_pub.publish(odom);
 }
 
 /**
@@ -94,15 +54,48 @@ int main(int argc, char** argv) {
     // Node initialization
     ros::init(argc, argv, "odom_pose");
     ros::NodeHandle n;
-    agv_position pose;
+    tf::TransformBroadcaster odom_broadcaster;
 
-    pose.odom_pub = n.advertise<nav_msgs::Odometry>("odom", 50);
+    ros::Publisher odom_pub = n.advertise<nav_msgs::Odometry>("odom", 50);
 
     // Topic subscribers
-    pose.subPose = n.subscribe("/orb_slam2_rgbd/pose", 10, &agv_position::poseCallback, &pose);
+    ros::Subscriber subPose = n.subscribe("/orb_slam2_rgbd/pose", 10, &poseCallback);
 
-    // Node execution
-    ros::spin();
+    ros::Rate loop_rate(10);
 
+    while(n.ok())
+    {
+       ros::spinOnce();
+       geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(yaw);
+
+       //first, we'll publish the transform over tf
+       geometry_msgs::TransformStamped odom_trans;
+       odom_trans.header.stamp = ros::Time::now();
+       odom_trans.header.frame_id = "odom";
+       odom_trans.child_frame_id = "base_footprint";
+
+       odom_trans.transform.translation.x = tx - 0.275;
+       odom_trans.transform.translation.y = ty;
+       odom_trans.transform.translation.z = -0.66;
+       odom_trans.transform.rotation = odom_quat;
+
+       //send the transform
+       odom_broadcaster.sendTransform(odom_trans);
+ 
+       nav_msgs::Odometry odom;
+       odom.header.stamp = ros::Time::now();
+       odom.header.frame_id = "odom";
+
+       //set the position
+       odom.pose.pose.position.x = tx - 0.275;
+       odom.pose.pose.position.y = ty;
+       odom.pose.pose.position.z = -0.66;
+       odom.pose.pose.orientation = odom_quat;
+       odom.child_frame_id = "base_footprint";
+
+       //publish the message
+       odom_pub.publish(odom);
+       loop_rate.sleep();
+    }
     return 0;
 }
