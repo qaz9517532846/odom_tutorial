@@ -5,205 +5,177 @@
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <std_msgs/Float64.h>
 #include <math.h>
+#include "tf2/LinearMath/Quaternion.h"
+#include "tf2/LinearMath/Matrix3x3.h"
 
-float x;
-float y;
-float th;
+float encode_1_vel, encode_2_vel;
+float encode_vel, encode_th;
+float vel_right, vel_left;
+
+float x, y, th,vth,imu_th;
+int a,b;
+
+float encoder_x;
+float encoder_y;
+float encoder_th;
 
 float amcl_x;
 float amcl_y;
 float amcl_th;
 
-float vx = 0;
-float vy = 0;
-float vth = 0;
+double roll, pitch, yaw;
 
-float x_1, y_1, th_1;
-float x_2, y_2, th_2;
-
-float encode_1_vel;
-float encode_2_vel;
-float encode_vel;
-float encode_th;
-
-float vel_right;
-float vel_left;
-
-int i = 0;
-int a, b;
-
-ros::Time current_time;
-ros::Time last_time;
-
-class agv_position {
-public:
-    ros::NodeHandle n;
-
-    ros::Publisher odom_pub;
-    ros::Subscriber pose_msg;
-    ros::Subscriber amcl_pose_msg;
-    ros::Subscriber encode_1;
-    ros::Subscriber encode_2;
-    ros::Subscriber vel_1;
-    ros::Subscriber vel_2;
-
-    tf::TransformBroadcaster odom_broadcaster;
-
-    void amcl_poscb(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msgAMCL);
-    void PosCB(const geometry_msgs::Pose2D::ConstPtr& msg);
-    void encode1_vel(const std_msgs::Float64::ConstPtr& msg);
-    void encode2_vel(const std_msgs::Float64::ConstPtr& msg);
-    void vel_A(const std_msgs::Float64::ConstPtr& msg);
-    void vel_B(const std_msgs::Float64::ConstPtr& msg);
-};
-
-void agv_position::vel_A(const std_msgs::Float64::ConstPtr& msg)
+void vel_A(const std_msgs::Float64::ConstPtr& msg)
 { 
   vel_right = msg->data;
   if(vel_right < 0)
-  {
     a = -1;
-  }
   else
-  {
     a = 1;
-  }
 }
 
-void agv_position::vel_B(const std_msgs::Float64::ConstPtr& msg)
+void vel_B(const std_msgs::Float64::ConstPtr& msg)
 { 
   vel_left = msg->data;
   if(vel_left < 0)
-  {
     b = -1;
-  }
   else
-  {
     b = 1;
-  }
 }
 
-void agv_position::encode2_vel(const std_msgs::Float64::ConstPtr& msg)
+void encode1_vel(const std_msgs::Float64::ConstPtr& msg)
 {
-  encode_2_vel = msg->data * 0.01 * b;
+  encode_1_vel = msg->data * 0.0105 * a;
+  ROS_INFO("encoder1 = %f", encode_1_vel);
 }
 
-
-void agv_position::encode1_vel(const std_msgs::Float64::ConstPtr& msg)
+void encode2_vel(const std_msgs::Float64::ConstPtr& msg)
 {
-  encode_1_vel = msg->data * 0.01 * a;
+  encode_2_vel = msg->data * 0.0105 *b;
+  ROS_INFO("encoder2 = %f", encode_2_vel);
 }
 
-void agv_position::amcl_poscb(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msgAMCL)
+void gyr_z(const geometry_msgs::Vector3::ConstPtr& ypr)
+{
+  vth = ypr->z;
+}
+
+void amcl_poscb(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msgAMCL)
 {
   amcl_x = msgAMCL->pose.pose.position.x;
   amcl_y = msgAMCL->pose.pose.position.y;
-  amcl_th = msgAMCL->pose.pose.orientation.w;
-}
 
-void agv_position::PosCB(const geometry_msgs::Pose2D::ConstPtr& msg) 
-{
-  agv_position pose;
-  if(i == 0)
-  {
-     x += amcl_x;
-     y += amcl_y;
-     th += amcl_th;
-  }
-  
-  current_time = ros::Time::now();
-  double dt = (current_time - last_time).toSec();
+   tf2::Quaternion q(
+        msgAMCL->pose.pose.orientation.x,
+        msgAMCL->pose.pose.orientation.y,
+        msgAMCL->pose.pose.orientation.z,
+        msgAMCL->pose.pose.orientation.w);
 
-  tf::TransformBroadcaster odom_broadcaster;
+    // 3x3 Rotation matrix from quaternion
+    tf2::Matrix3x3 m(q);
 
-  //since all odometry is 6DOF we'll need a quaternion created from yaw
-  geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(th);
-
-  //first, we'll publish the transform over tf
-  geometry_msgs::TransformStamped odom_trans;
-  odom_trans.header.stamp = current_time;
-  odom_trans.header.frame_id = "odom";
-  odom_trans.child_frame_id = "base_link";
-
-  odom_trans.transform.translation.x = x;
-  odom_trans.transform.translation.y = y;
-  odom_trans.transform.translation.z = 0.0;
-  odom_trans.transform.rotation = odom_quat;
-
-  //send the transform
-  pose.odom_broadcaster.sendTransform(odom_trans);
-
-  if(i % 2 == 1)
-  {
-     x_1  = msg->x;
-     y_1  = msg->y;
-     th_1 = msg->theta;
-
-     vx = x_1 - x_2;
-     vy = y_1 - y_2;
-     vth = th_1 - th_2;
-  }
-  else
-  {
-     x_2  = msg->x;
-     y_2  = msg->y;
-     th_2 = msg->theta;
-
-     vx = x_2 - x_1;
-     vy = y_2 - y_1;
-     vth = th_2 - th_1;
-  }
-
-  bool vel_error = vx > 0.3 | vy > 0.3 | vx < -0.3 | vy < -0.3 | vth > 1 | vth < -1;
- 
-  if(vel_error == 1)
-  {
-     ROS_INFO("change encoder");
-     encode_vel = (encode_1_vel + encode_2_vel) / 2;
-     encode_th = (encode_1_vel - encode_2_vel) / 0.27;
-     vx = encode_vel * cos(th) * dt;
-     vy = encode_vel * sin(th) * dt;
-     vth = encode_th * dt;
-  }
-
-  x += vx;
-  y += vy;
-  th += vth;
-
-  //next, we'll publish the odometry message over ROS
-  nav_msgs::Odometry odom;
-  odom.header.stamp = current_time;
-  odom.header.frame_id = "odom";
-
-  //set the position
-  odom.pose.pose.position.x = x;
-  odom.pose.pose.position.y = y;
-  odom.pose.pose.position.z = 0.0;
-  odom.pose.pose.orientation = odom_quat;
-
-  //set the velocity
-  odom.child_frame_id = "base_link";
-
-  //publish the message
-  pose.odom_pub.publish(odom);
-  i++;
-  last_time = current_time;
+    // Roll Pitch and Yaw from rotation matrix
+    m.getRPY(roll, pitch, yaw);
 }
 
 int main(int argc, char** argv){
-  ros::init(argc, argv, "odom_vel");
+  ros::init(argc, argv, "odom_amcl");
+  ros::NodeHandle n;
 
-  agv_position pose;
+  tf::TransformBroadcaster odom_broadcaster;
 
-  current_time = ros::Time::now();
+  ros::Publisher odom_pub = n.advertise<nav_msgs::Odometry>("odom", 50);
 
-  pose.odom_pub = pose.n.advertise<nav_msgs::Odometry>("odom", 50);
+  // Topic subscribers
+  ros::Subscriber vel_1 = n.subscribe("velA", 1000, &vel_A);
+  ros::Subscriber vel_2 = n.subscribe("velB", 1000, &vel_B);
 
-  pose.vel_1 = pose.n.subscribe("velA", 1000, &agv_position::vel_A, &pose);
-  pose.vel_2 = pose.n.subscribe("velB", 1000, &agv_position::vel_B, &pose);
-  pose.encode_1 = pose.n.subscribe("encoder1_value", 1000, &agv_position::encode1_vel, &pose);
-  pose.encode_2 = pose.n.subscribe("encoder2_value", 1000, &agv_position::encode2_vel, &pose);
-  pose.amcl_pose_msg = pose.n.subscribe("amcl_pose", 1000, &agv_position::amcl_poscb, &pose);
-  pose.pose_msg = pose.n.subscribe("pose2D", 1000, &agv_position::PosCB, &pose);
-  ros::spin();
+  ros::Subscriber imu_gyr_z = n.subscribe("imu_gyr",1000, &gyr_z);
+
+  ros::Subscriber encode_1 = n.subscribe("encoder1_value", 1000, &encode1_vel);
+  ros::Subscriber encode_2 = n.subscribe("encoder2_value", 1000, &encode2_vel);
+
+  ros::Subscriber amcl_pose_msg = n.subscribe("amcl_pose", 1000, &amcl_poscb);
+
+  ros::Rate loop_rate(10);
+
+  ros::Time inition_time = ros::Time::now();
+  ros::Time current_time, last_time;
+
+  while(n.ok())
+  {
+     ros::spinOnce();
+     current_time = ros::Time::now();
+
+     double continue_time = (current_time - last_time).toSec();
+
+     geometry_msgs::TransformStamped odom_trans;
+     geometry_msgs::Quaternion odom_quat;
+
+     odom_trans.header.stamp = current_time;
+     odom_trans.header.frame_id = "odom";
+     odom_trans.child_frame_id = "base_footprint";
+
+     nav_msgs::Odometry odom;
+     odom.header.stamp = current_time;
+     odom.header.frame_id = "odom";
+     odom.child_frame_id = "base_footprint";
+     
+     if(continue_time < 7)
+     {
+        odom_quat = tf::createQuaternionMsgFromYaw(encoder_th);
+
+        double dt = (current_time - last_time).toSec();
+        encode_vel = (encode_1_vel + encode_2_vel) / 2;
+	imu_th = vth *dt;
+
+        double vx = encode_vel * cos(th) * dt;
+	double vy = encode_vel * sin(th) * dt;
+	
+
+	encoder_x = encoder_x + vx;
+	encoder_y = encoder_y + vy;
+        encoder_th = encoder_th + imu_th;
+
+        int th_num;
+        th_num = encoder_th / 6.2832;
+        encoder_th = encoder_th - (th_num * 6.2832);
+
+        //first, we'll publish the transform over tf
+        odom_trans.transform.translation.x = encoder_x;
+        odom_trans.transform.translation.y = encoder_y;
+        odom_trans.transform.translation.z = 0;
+        odom_trans.transform.rotation = odom_quat;
+
+        //set the position
+        odom.pose.pose.position.x = encoder_x;
+        odom.pose.pose.position.y = encoder_y;
+        odom.pose.pose.position.z = 0;
+        odom.pose.pose.orientation = odom_quat;
+     }
+     else
+     {
+        odom_quat = tf::createQuaternionMsgFromYaw(yaw);
+        //first, we'll publish the transform over tf
+        odom_trans.transform.translation.x = amcl_x;
+        odom_trans.transform.translation.y = amcl_y;
+        odom_trans.transform.translation.z = 0;
+        odom_trans.transform.rotation = odom_quat;
+
+        //set the position
+        odom.pose.pose.position.x = amcl_x;
+        odom.pose.pose.position.y = amcl_y;
+        odom.pose.pose.position.z = 0;
+        odom.pose.pose.orientation = odom_quat;
+     }
+
+     //send the transform
+     odom_broadcaster.sendTransform(odom_trans);
+
+     //publish the message
+     odom_pub.publish(odom);
+     last_time = current_time;
+     loop_rate.sleep();
+  }
+  return 0;
 }
