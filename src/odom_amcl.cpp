@@ -107,7 +107,7 @@ int main(int argc, char** argv){
      ros::spinOnce();
      current_time = ros::Time::now();
 
-     double continue_time = (current_time - last_time).toSec();
+     double continue_time = (current_time - inition_time).toSec();
 
      geometry_msgs::TransformStamped odom_trans;
      geometry_msgs::Quaternion odom_quat;
